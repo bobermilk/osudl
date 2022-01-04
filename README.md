@@ -1,4 +1,5 @@
 # osudl
+[![demo video](https://img.youtube.com/vi/cAqbzolegeU/0.jpg)](https://www.youtube.com/watch?v=cAqbzolegeU)
 ## Running not from source instructions
 0. Have chrome installed. 
 1. Download the osudl binary from https://www.mediafire.com/file/yzj51ll4x6y9960/osudl/file
