@@ -1,5 +1,5 @@
 # osudl
-## I'm rewriting this project, it is for me to learn more about python and web stuff
+oauth key is mandatory.
 
 ## Features
 1. Batch downloads - Get beatmaps from sources (userpages, beatmap packs, mappools, .db/.txt files, google sheets)
