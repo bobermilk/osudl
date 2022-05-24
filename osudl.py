@@ -60,7 +60,7 @@ mirrors = {
         "https://txy1.sayobot.cn/beatmaps/download/full/{}?server=null",
         "https://osu.sayobot.cn/",
     ],
-    3: ["[NeriNyan]   ", "https://xiiov.com/d/{}", "https://nerina.pw/"],
+    3: ["[NeriNyan]   ", "https://nerina.pw/d/direct/{}?server=0", "https://nerina.pw/"],
     4: [
         "[Chimu.moe]  ",
         "https://api.chimu.moe/v1/download/{}?n=1",
