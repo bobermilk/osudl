@@ -61,10 +61,10 @@ def create_collection(tournament_collections, version: int, filename: str):
 
 if __name__ == "__main__":
     urlextractor = URLExtract()
-    maps=[] # for use with the main program
+    maps="" # for use with the main program
     tournament_dict={}
     # hardcoded for now
-    tourney_dir=os.path.join(os.getcwd(),"md","test")
+    tourney_dir=os.path.join(os.getcwd(),"md","mania")
     for filename in os.listdir(tourney_dir):
         with open(os.path.join(tourney_dir, filename)) as f:
             name = filename[:-3]
@@ -72,6 +72,8 @@ if __name__ == "__main__":
             urls=[x for x in urlextractor.find_urls(f.read()) if "beatmapsets" in x]
             tourney_hash=[]
             for url in urls:
+                maps+=url
+                maps+="\n"
                 url=url.replace(')', '/')
                 ids=[x for x in url.split("/") if x.isdigit()]
                 if len(ids) > 0:
@@ -81,18 +83,17 @@ if __name__ == "__main__":
                 hash, beatmapsetid=get_beatmaphash(name, beatmapid)
                 if hash != 0:
                     tourney_hash.append(hash)
-                    maps.append(("tournaments", int(beatmapsetid)))
             tournament_dict[name]=tourney_hash
     create_collection(tournament_dict, 1, "tournament.db")
     print()
     with open("missing.txt", "w+") as f:
         f.write(missing)
+    with open("maps.txt", "w+") as f:
+        f.write(maps)
+
     print("wrote the missing maps to ./missing.txt")
     print()
     print("wrote the tournaments to ./tournament.db")
-    print()
-    print("attempting to download all the maps")
-    osudl.main(OAUTH_TOKEN,maps)
 
 
 
