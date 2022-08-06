@@ -11,8 +11,6 @@ API_URL = "https://osu.ppy.sh/api/v2"
 TOKEN_URL = 'https://osu.ppy.sh/oauth/token'
 missing=""
 
-client_id=123456
-client_secret=''
 def get_token():
     data = {
         'client_id': client_id,
@@ -38,7 +36,7 @@ def get_beatmaphash(name,beatmap_id):
     try:
         return j["checksum"], j["beatmapset_id"]
     except:
-        missing.append(f"{name}: {beatmap_id}\n")
+        missing+=f"{name}: {beatmap_id}\n"
         return 0,0
 
 def create_collection(tournament_collections, version: int, filename: str):
@@ -73,7 +71,8 @@ if __name__ == "__main__":
             urls=[x for x in urlextractor.find_urls(f.read()) if "beatmapsets" in x]
             tourney_hash=[]
             for url in urls:
-                ids=[x for x in url.split("#|/|?|)") if x.isdigit()]
+                url=url.replace(')', '/')
+                ids=[x for x in url.split("/") if x.isdigit()]
                 if len(ids) > 0:
                     beatmapid=int(ids[-1])
                 else:
@@ -85,7 +84,7 @@ if __name__ == "__main__":
             tournament_dict[name]=tourney_hash
     create_collection(tournament_dict, 1, "tournament.db")
     print()
-    with open("missing.txt", "w") as f:
+    with open("missing.txt", "w+") as f:
         f.write(missing)
     print("wrote the missing maps to ./missing.txt")
     print()

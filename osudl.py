@@ -641,7 +641,7 @@ def main(token, pending_downloads):
     mirror_queue = queue.Queue(maxsize=total_threads)  # multithreading queue
     progress_bars = []
 
-    if token == None && pending_downloads == None :
+    if token == None and pending_downloads == None :
         # Fetching the beatmaps
         match int(choice):
             case 1:
@@ -889,7 +889,8 @@ def main(token, pending_downloads):
                             # ranks are later
                             play_detail_list = 1
                         else:
-                            play_detail_list = 0                        topranks_section = driver.find_element(
+                            play_detail_list = 0
+                            topranks_section = driver.find_element(
                             By.XPATH, "//div[@data-page-id='top_ranks']"
                         )
                         # Prechecking
@@ -1332,9 +1333,9 @@ def main(token, pending_downloads):
                 # text, xls
             # case 6:
             # websites
-        else:
-            maps=pending_downloads
-            OAUTH_TOKEN=token
+    else:
+        maps=pending_downloads
+        OAUTH_TOKEN=token
 
     # get rid of duplicates
     maps = list(set(maps))
