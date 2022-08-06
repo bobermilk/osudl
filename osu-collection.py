@@ -36,6 +36,7 @@ def get_beatmaphash(name,beatmap_id):
     try:
         return j["checksum"], j["beatmapset_id"]
     except:
+        global missing
         missing+=f"{name}: {beatmap_id}\n"
         return 0,0
 
@@ -63,7 +64,7 @@ if __name__ == "__main__":
     maps=[] # for use with the main program
     tournament_dict={}
     # hardcoded for now
-    tourney_dir=os.path.join(os.getcwd(),"md","mania")
+    tourney_dir=os.path.join(os.getcwd(),"md","test")
     for filename in os.listdir(tourney_dir):
         with open(os.path.join(tourney_dir, filename)) as f:
             name = filename[:-3]
@@ -80,7 +81,7 @@ if __name__ == "__main__":
                 hash, beatmapsetid=get_beatmaphash(name, beatmapid)
                 if hash != 0:
                     tourney_hash.append(hash)
-                    maps.append(beatmapsetid)
+                    maps.append(("tournaments", int(beatmapsetid)))
             tournament_dict[name]=tourney_hash
     create_collection(tournament_dict, 1, "tournament.db")
     print()

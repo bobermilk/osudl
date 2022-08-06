@@ -318,34 +318,38 @@ def get_pack(driver, actions, page_num, pack_titles, pack_progress, gamemode):
 def download_file(index, folder_name, url):
     # Links that are from userpage needs to get redirected because the link only contains a query to the
     # difficulty id not the beatmapset id
-    if "?" in url or "#" not in url and "/beatmapsets/" not in url:
-        if not use_api:
-            with lock:
-                url = requests.head(url, allow_redirects=True).url
-                sleep(1)  # timeout if you get rate limited by official server
-        else:
-            beatmapset_id, beatmap_id = get_beatmapsetid(
-                [int(s) for s in re.split("#|/|?", url) if s.isdigit()][-1]
-            )
-            if beatmapset_id == 0:
-                return True
-            # do we skip this one?
-            if beatmapset_id is None:
-                return True
-            if prevent_duplicates == "Y":
-                if beatmapset_id in osu_dict.values():
-                    logger.debug(f"Skipping {beatmapsetid}")
+    if not url.isdigit():
+        if "?" in url or "#" not in url and "/beatmapsets/" not in url:
+            if not use_api:
+                with lock:
+                    url = requests.head(url, allow_redirects=True).url
+                    sleep(1)  # timeout if you get rate limited by official server
+            else:
+                beatmapset_id, beatmap_id = get_beatmapsetid(
+                    [int(s) for s in re.split("#|/|?", url) if s.isdigit()][-1]
+                )
+                if beatmapset_id == 0:
                     return True
+                # do we skip this one?
+                if beatmapset_id is None:
+                    return True
+                if prevent_duplicates == "Y":
+                    if beatmapset_id in osu_dict.values():
+                        logger.debug(f"Skipping {beatmapsetid}")
+                        return True
 
-            url = beatmapset_id + "/" + beatmap_id
+                url = beatmapset_id + "/" + beatmap_id
 
-    # TODO: get beatmapid along with beatmapsetid, then use it later to handle the downloaded file (unzip_osz() in utilities.py)
-    ids = [
-        int(s) for s in re.split("#|/", url) if s.isdigit()
-    ]  # index 0 is beatmapset id, index 1 is diff id
-    if ids[0] in downloaded_maps:
-        return check_file("", "", "", "", False)
+        # TODO: get beatmapid along with beatmapsetid, then use it later to handle the downloaded file (unzip_osz() in utilities.py)
+        ids = [
+            int(s) for s in re.split("#|/", url) if s.isdigit()
+        ]  # index 0 is beatmapset id, index 1 is diff id
+        if ids[0] in downloaded_maps:
+            return check_file("", "", "", "", False)
+        else:
+            downloaded_maps.append(ids[0])
     else:
+        ids=[url]
         downloaded_maps.append(ids[0])
 
     mirror = mirror_queue.get()
@@ -615,22 +619,6 @@ def main(token, pending_downloads):
         bulk = "n"
         prevent_duplicates = "n"
 
-    print(
-        color.BLUE
-        + "What to download? [The program will ask for a similar link later]\n"
-    )
-    options = [
-        "User plays / Mapper Creations [https://osu.ppy.sh/users/2]",
-        "Beatmap packs [https://osu.ppy.sh/beatmaps/packs]",
-        "Mappool [https://osu.ppy.sh/wiki/en/Tournaments/OWC/2021]",
-        "Target osu.db / collection.db file (in root folder of osu install)",
-        "Aggregated osu.ppy.sh beatmap pages .txt file / Mappool spreadsheet .xls file (NOT FINISHED)",
-        "osu-pps.com / osucollector.com bulk downloading (NOT FINISHED)",
-    ]
-    for i, item in enumerate(options, 1):
-        print(color.PURPLE + f"  {i}. " + color.CYAN + item)
-    print(color.END)
-    choice = input("Your choice >> ")
     if not DEBUG and download_change == "n":
         download_path = os.path.join(os.getcwd(), "downloads")
     os.makedirs(download_path, exist_ok=True)
@@ -642,6 +630,24 @@ def main(token, pending_downloads):
     progress_bars = []
 
     if token == None and pending_downloads == None :
+        print(
+            color.BLUE
+            + "What to download? [The program will ask for a similar link later]\n"
+        )
+        options = [
+            "User plays / Mapper Creations [https://osu.ppy.sh/users/2]",
+            "Beatmap packs [https://osu.ppy.sh/beatmaps/packs]",
+            "Mappool [https://osu.ppy.sh/wiki/en/Tournaments/OWC/2021]",
+            "Target osu.db / collection.db file (in root folder of osu install)",
+            "Aggregated osu.ppy.sh beatmap pages .txt file / Mappool spreadsheet .xls file (NOT FINISHED)",
+            "osu-pps.com / osucollector.com bulk downloading (NOT FINISHED)",
+        ]
+        for i, item in enumerate(options, 1):
+            print(color.PURPLE + f"  {i}. " + color.CYAN + item)
+        print(color.END)
+        choice = input("Your choice >> ")
+
+
         # Fetching the beatmaps
         match int(choice):
             case 1:
