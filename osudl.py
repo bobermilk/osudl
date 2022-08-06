@@ -559,7 +559,7 @@ def enumerate_osudb(file):
         database_progress.close()
     return custom_osu_dict
 
-def main():
+def main(token, pending_downloads):
     if not DEBUG:
         print_garbage()
     print(
@@ -641,7 +641,7 @@ def main():
     mirror_queue = queue.Queue(maxsize=total_threads)  # multithreading queue
     progress_bars = []
 
-    if len(sys.argv) <= 1:
+    if token == None && pending_downloads == None :
         # Fetching the beatmaps
         match int(choice):
             case 1:
@@ -1333,8 +1333,8 @@ def main():
             # case 6:
             # websites
         else:
-            maps=sys.argv[2]
-            OAUTH_TOKEN=sys.argv[1]
+            maps=pending_downloads
+            OAUTH_TOKEN=token
 
     # get rid of duplicates
     maps = list(set(maps))
@@ -1415,4 +1415,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(None, None)
