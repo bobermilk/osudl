@@ -559,8 +559,7 @@ def enumerate_osudb(file):
         database_progress.close()
     return custom_osu_dict
 
-
-if __name__ == "__main__":
+def main():
     if not DEBUG:
         print_garbage()
     print(
@@ -642,697 +641,700 @@ if __name__ == "__main__":
     mirror_queue = queue.Queue(maxsize=total_threads)  # multithreading queue
     progress_bars = []
 
-    # Fetching the beatmaps
-    match int(choice):
-        case 1:
-            try:
-                # Parsing html is alot like writing html
-                print(
-                    "\nSetting up browser emulation to retrieve all maps from osu website"
-                )
-                driver = setup_webdriver(headless=True)
-
-                # the data-page-id are as follows: me, recent_activity, top_ranks, medals, historical, beatmaps, kudosu
-                # title_count items, respectively
-                # section 0:recent_activity[0] (recent top 1000)
-                # section 1:top_ranks[0] and top_ranks[1] (top plays, first place ranks)
-                # section 2:historical[0] (all plays, recent submission)
-                # section 3:beatmaps[0](favourites))
-                title_count = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-                section_order = [0, 0, 0, 0]
-                # This is unecessary cuz it's only used to check for relative order of Ranks and Historical that is play-detail-list order
-                # Get section order by checking titles (user can alter this order)
-                # This works because selenium use breadth first search and these headers are same level in DOM (thanks bebby)
-                for i, section_header in enumerate(
-                    driver.find_elements(
-                        By.XPATH, "//h2[@class='title title--page-extra']"
+    if len(sys.argv) <= 1:
+        # Fetching the beatmaps
+        match int(choice):
+            case 1:
+                try:
+                    # Parsing html is alot like writing html
+                    print(
+                        "\nSetting up browser emulation to retrieve all maps from osu website"
                     )
-                ):
-                    if section_header.text == "Recent":
-                        section_order[0] = i
-                    if section_header.text == "Ranks":
-                        section_order[1] = i
-                    if section_header.text == "Historical":
-                        section_order[2] = i
-                    if section_header.text == "Beatmaps":
-                        section_order[3] = i
+                    driver = setup_webdriver(headless=True)
 
-                # https://osu.ppy.sh/beatmaps/687841?mode=mania
-                site = input("\nPlayer/Mapper link? >> ")
-                print(color.BLUE + "\nWhat gamemode for this user??\n")
-                options = ["Standard", "Taiko", "Catch", "Mania"]
-                for i, item in enumerate(options, 1):
-                    print(color.PURPLE + f"  {i}. " + color.CYAN + item)
-                print(color.END)
-                gamemode = int(input("Your choice >> "))
-                clearline(10)
-                print(
-                    color.PURPLE
-                    + f"{gamemode_names[gamemode]} has been selected"
-                    + color.END
-                )
-                site = site.rstrip("/")
-
-                if all(x in ["osu", "taiko", "fruits", "mania"] for x in site):
-                    tmp = site.rfind("/")
-                    site = site[:tmp]
-
-                site = site + "/{}".format(gamemode_names[gamemode])
-                if DEBUG:
-                    site = "https://osu.ppy.sh/users/5139042/osu"
-
-                # option->title_count
-                # 1->2 2->0 3->1 4->4 5->5 6->3 7->6 8->7 9->8 10->9
-                print(color.BLUE + "\nUser Options" + color.END)
-                user_options = [
-                    "All plays",
-                    "Top plays",
-                    "First place ranks",
-                    "Favorites",
-                    "Recent top 1000",
-                    "Recent 24h submissions",
-                ]
-                for i, item in enumerate(user_options, 1):
-                    print(color.PURPLE + f"  {i}. " + color.CYAN + item)
-                print(color.BLUE + "\nMapper Options" + color.END)
-                mapper_options = ["Ranked", "Loved", "Pending", "Graveyarded"]
-                for i, item in enumerate(mapper_options, 7):
-                    print(color.PURPLE + f"  {i}. " + color.CYAN + item)
-                print(color.END)
-                choice_choice = input("Your choice(s) >> ").split()
-                choice_choice = list(map(int, choice_choice))
-
-                use_api = True
-                # if all(x in [1, 2, 3, 5, 6] for x in choice_choice):
-                #     if not DEBUG:
-                #         print("osu! api key for downloading unlimited beatmaps much faster (https://osu.ppy.sh/p/api)")
-                #         osu_api_key=input("key >> ").strip()
-                #         if not osu_api_key:
-                #             use_api=True
-                #             print("Proceeding without api key is possible, but you will get rate limited on osu.ppy.sh if you download too many beatmaps")
-                #     else:
-                #         osu_api_key="dd0653458de7f3ccb1128162966a8248b83b3d13"
-
-                # get site
-                actions = driver_get(
-                    driver, site, 1
-                )  # this is blocking until site is loaded
-
-                # get user info
-                user_name = driver.find_element(
-                    By.XPATH, "//span[@class='u-ellipsis-pre-overflow']"
-                ).text
-                user_country = driver.find_element(
-                    By.XPATH, "//span[@class='profile-info__flag-text']"
-                ).text
-
-                print(
-                    f'Fetching beatmaps from player "{user_name}" from {user_country}'
-                )
-                # The following for loop checks each choice for being selected and does pre and post checking:
-
-                # Prechecking
-                # find title and title__count
-                # exist:
-                # title = useless
-                # title, title__count=0 = not so useless, zero maps that satisfies condition
-                # title, title__conut>0 = useful
-                # then we find the buttons inside the second occurence of section data-page-id
-
-                # Postchecking
-                # Get inital button count (check for not so useless)
-                # expected_buttons is needed for checking which is which suppose there is not min or max possible buttons
-
-                if 1 in choice_choice or 6 in choice_choice:
-                    historical_section = driver.find_element(
-                        By.XPATH, "//div[@data-page-id='historical']"
-                    )
-                    # Prechecking
-                    expected_buttons = [1, 1]
-                    section_titles = historical_section.find_elements(
-                        By.XPATH, ".//h3[@class='title title--page-extra-small']"
-                    )
-                    for title in section_titles:
-                        if "Play History" in title.text:
-                            continue
-                        if "Most Played Beatmaps" in title.text:
-                            title_count[2] = format_website_number(
-                                section_titles[1]
-                                .find_element(
-                                    By.XPATH, ".//span[@class='title__count']"
-                                )
-                                .text
-                            )
-                            if title_count[2] <= 5:
-                                expected_buttons[0] = 0
-
-                        if "Recent Plays (24h)" in title.text:
-                            title_count[3] = format_website_number(
-                                section_titles[2]
-                                .find_element(
-                                    By.XPATH, ".//span[@class='title__count']"
-                                )
-                                .text
-                            )
-                            if title_count[3] <= 5:
-                                expected_buttons[1] = 0
-
-                    # Postchecking
-                    if title_count[2] != 0 and 1 in choice_choice:
-                        print(
-                            "1: Fetching all beatmaps ever played ({} beatmaps)".format(
-                                title_count[2]
-                            ),
-                            end="\r",
-                        )
-                        expected_buttons = click_showmorebtn(
-                            actions,
-                            historical_section,
-                            0,
-                            expected_buttons,
-                            title_count[2],
-                        )
-                        soup = BeautifulSoup(driver.page_source, "html.parser")
-                        # We use BS4 to parse cuz selenium getAttribute is slow
-                        # all_user_maps_played=driver.find_elements(By.XPATH, "//a[@class='beatmap-playcount__cover']")
-                        for i in soup.find_all(
-                            "a", {"class", "beatmap-playcount__title"}
-                        ):
-                            maps.append(("All plays", i["href"]))
-                        print(
-                            "1: Fetched all beatmaps ever played ({} beatmaps)".format(
-                                title_count[2]
-                            )
-                        )
-
-                    if title_count[3] != 0 and 6 in choice_choice:
-                        print(
-                            f"6: Fetching beatmaps played in last 24h ({title_count[3]} beatmaps)",
-                            end="\r",
-                        )
-                        click_showmorebtn(
-                            actions,
-                            historical_section,
-                            1,
-                            expected_buttons,
-                            title_count[3],
-                        )
-                        play_list = historical_section.find_element(
-                            By.XPATH, ".//div[@class='play-detail-list']"
-                        )
-                        soup = BeautifulSoup(
-                            play_list.get_attribute("innerHTML"), "html.parser"
-                        )
-                        for i in soup.find_all(
-                            "a", {"class", "play-detail__title u-ellipsis-overflow"}
-                        ):
-                            maps.append(("Recent Plays (24h)", i["href"]))
-                        print(
-                            f"6: Fetched beatmaps played in last 24h ({title_count[3]} beatmaps)"
-                        )
-
-                if 5 in choice_choice:
-                    recentactivity_section = driver.find_element(
-                        By.XPATH, "//div[@data-page-id='recent_activity']"
-                    )
-                    # Prechecking
-                    expected_buttons = [1]
-                    title_count[5] = len(
+                    # the data-page-id are as follows: me, recent_activity, top_ranks, medals, historical, beatmaps, kudosu
+                    # title_count items, respectively
+                    # section 0:recent_activity[0] (recent top 1000)
+                    # section 1:top_ranks[0] and top_ranks[1] (top plays, first place ranks)
+                    # section 2:historical[0] (all plays, recent submission)
+                    # section 3:beatmaps[0](favourites))
+                    title_count = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                    section_order = [0, 0, 0, 0]
+                    # This is unecessary cuz it's only used to check for relative order of Ranks and Historical that is play-detail-list order
+                    # Get section order by checking titles (user can alter this order)
+                    # This works because selenium use breadth first search and these headers are same level in DOM (thanks bebby)
+                    for i, section_header in enumerate(
                         driver.find_elements(
-                            By.XPATH, "//li[@class='profile-extra-entries__item']"
+                            By.XPATH, "//h2[@class='title title--page-extra']"
                         )
-                    )
-                    if title_count[5] != 0:
-                        click_showmorebtn(
-                            actions,
-                            recentactivity_section,
-                            0,
-                            expected_buttons,
-                            title_count[5],
-                        )
-                        soup = BeautifulSoup(driver.page_source, "html.parser")
-                        extra_entries = soup.find_all(
-                            "div", {"class", "profile-extra-entries__text"}
-                        )
-                        for entry in extra_entries:
-                            for a in entry.find_all("a", href=True):
-                                if "/b/" in a["href"]:
-                                    maps.append(
-                                        (
-                                            "Recent top 1000 plays",
-                                            "https://osu.ppy.sh{}".format(a["href"]),
-                                        )
-                                    )
+                    ):
+                        if section_header.text == "Recent":
+                            section_order[0] = i
+                        if section_header.text == "Ranks":
+                            section_order[1] = i
+                        if section_header.text == "Historical":
+                            section_order[2] = i
+                        if section_header.text == "Beatmaps":
+                            section_order[3] = i
 
-                if 2 in choice_choice or 3 in choice_choice:
-                    if section_order[1] > section_order[2]:
-                        # ranks are later
-                        play_detail_list = 1
-                    else:
-                        play_detail_list = 0
-                    topranks_section = driver.find_element(
-                        By.XPATH, "//div[@data-page-id='top_ranks']"
-                    )
-                    # Prechecking
-                    expected_buttons = [1, 1]
-                    section_titles = topranks_section.find_elements(
-                        By.XPATH, ".//h3[@class='title title--page-extra-small']"
-                    )
-                    for title in section_titles:
-                        if "Best Performance" in title.text:
-                            title_count[0] = format_website_number(
-                                section_titles[0]
-                                .find_element(
-                                    By.XPATH, ".//span[@class='title__count']"
-                                )
-                                .text
-                            )
-                            if title_count[0] <= 5:
-                                expected_buttons[0] = 0
-                        if "First Place Ranks" in title.text:
-                            title_count[1] = format_website_number(
-                                section_titles[1]
-                                .find_element(
-                                    By.XPATH, ".//span[@class='title__count']"
-                                )
-                                .text
-                            )
-                            if title_count[1] <= 5:
-                                expected_buttons[1] = 0
-                    # Postchecking
-                    if title_count[0] != 0 and 2 in choice_choice:
-                        print(
-                            f"2: Fetching top pp plays ({title_count[0]} beatmaps)",
-                            end="\r",
-                        )
-                        expected_buttons = click_showmorebtn(
-                            actions,
-                            topranks_section,
-                            0,
-                            expected_buttons,
-                            title_count[0],
-                        )
-                        play_list = topranks_section.find_elements(
-                            By.XPATH, ".//div[@class='play-detail-list']"
-                        )[play_detail_list]
-                        soup = BeautifulSoup(
-                            play_list.get_attribute("innerHTML"), "html.parser"
-                        )
-                        for i in soup.find_all(
-                            "a", {"class", "play-detail__title u-ellipsis-overflow"}
-                        ):
-                            maps.append(("Top plays", i["href"]))
-                        play_detail_list += 1
-                        print(f"2: Fetched top pp plays ({title_count[0]} beatmaps)")
-
-                    if title_count[1] != 0 and 3 in choice_choice:
-                        print(
-                            f"3: Fetching global #1 scores ({title_count[1]} beatmaps)",
-                            end="\r",
-                        )
-                        click_showmorebtn(
-                            actions,
-                            topranks_section,
-                            1,
-                            expected_buttons,
-                            title_count[1],
-                        )
-                        play_list = topranks_section.find_elements(
-                            By.XPATH, ".//div[@class='play-detail-list']"
-                        )[play_detail_list]
-                        soup = BeautifulSoup(
-                            play_list.get_attribute("innerHTML"), "html.parser"
-                        )
-                        for i in soup.find_all(
-                            "a", {"class", "play-detail__title u-ellipsis-overflow"}
-                        ):
-                            maps.append(("First place ranks", i["href"]))
-                        print(
-                            f"3: Fetched global #1 scores by user ({title_count[1]} beatmaps)"
-                        )
-
-                if all(x in [4, 7, 8, 9, 10] for x in choice_choice):
-                    beatmaps_section = driver.find_element(
-                        By.XPATH, "//div[@data-page-id='beatmaps']"
-                    )
-                    # Prechecking
-                    expected_buttons = [1, 1, 1, 1, 1]
-                    expected_containers = [1, 1, 1, 1, 1]
-                    section_titles = beatmaps_section.find_elements(
-                        By.XPATH, ".//h3[@class='title title--page-extra-small']"
-                    )
-                    for title in section_titles:
-                        if "Favourite" in title.text:
-                            title_count[4] = format_website_number(
-                                section_titles[0]
-                                .find_element(
-                                    By.XPATH, ".//span[@class='title__count']"
-                                )
-                                .text
-                            )
-                            if title_count[4] == 0:
-                                expected_containers[0] = 0
-                            if title_count[4] <= 6:
-                                expected_buttons[0] = 0
-                        if "Ranked" in title.text:
-                            title_count[6] = format_website_number(
-                                section_titles[1]
-                                .find_element(
-                                    By.XPATH, ".//span[@class='title__count']"
-                                )
-                                .text
-                            )
-                            if title_count[6] == 0:
-                                expected_containers[1] = 0
-                            if title_count[6] <= 6:
-                                expected_buttons[1] = 0
-                        if "Loved" in title.text:
-                            title_count[7] = format_website_number(
-                                section_titles[2]
-                                .find_element(
-                                    By.XPATH, ".//span[@class='title__count']"
-                                )
-                                .text
-                            )
-                            if title_count[7] == 0:
-                                expected_containers[2] = 0
-                            if title_count[7] <= 6:
-                                expected_buttons[2] = 0
-                        if "Pending" in title.text:
-                            title_count[8] = format_website_number(
-                                section_titles[3]
-                                .find_element(
-                                    By.XPATH, ".//span[@class='title__count']"
-                                )
-                                .text
-                            )
-                            if title_count[8] == 0:
-                                expected_containers[3] = 0
-                            if title_count[8] <= 6:
-                                expected_buttons[3] = 0
-                        if "Graveyarded" in title.text:
-                            title_count[9] = format_website_number(
-                                section_titles[4]
-                                .find_element(
-                                    By.XPATH, ".//span[@class='title__count']"
-                                )
-                                .text
-                            )
-                            if title_count[9] == 0:
-                                expected_containers[4] = 0
-                            if title_count[9] <= 6:
-                                expected_buttons[4] = 0
-
-                    # Postchecking
-                    if title_count[4] != 0 and 4 in choice_choice:
-                        print(
-                            f"4: Fetching favourite maps ({title_count[4]} beatmaps)",
-                            end="\r",
-                        )
-                        expected_buttons = click_showmorebtn(
-                            actions,
-                            beatmaps_section,
-                            0,
-                            expected_buttons,
-                            title_count[4],
-                        )
-                        play_list = beatmaps_section.find_elements(
-                            By.XPATH,
-                            ".//div[@class='osu-layout__col-container osu-layout__col-container--with-gutter js-audio--group']",
-                        )[0]
-                        soup = BeautifulSoup(
-                            play_list.get_attribute("innerHTML"), "html.parser"
-                        )
-                        for i in soup.find_all(
-                            "a", {"class", "beatmapset-panel__cover-container"}
-                        ):
-                            maps.append(("Favourites", i["href"]))
-                        print(f"4: Fetched favourite maps ({title_count[4]} beatmaps)")
-
-                    if title_count[6] != 0 and 7 in choice_choice:
-                        print(
-                            f"7: Fetching ranked maps ({title_count[6]} beatmaps)",
-                            end="\r",
-                        )
-                        expected_buttons = click_showmorebtn(
-                            actions,
-                            beatmaps_section,
-                            1,
-                            expected_buttons,
-                            title_count[6],
-                        )
-                        container_pos = 1
-                        for i in range(0, container_pos):
-                            if not expected_containers[i]:
-                                container_pos -= 1
-                        play_list = beatmaps_section.find_elements(
-                            By.XPATH,
-                            ".//div[@class='osu-layout__col-container osu-layout__col-container--with-gutter js-audio--group']",
-                        )[container_pos]
-                        soup = BeautifulSoup(
-                            play_list.get_attribute("innerHTML"), "html.parser"
-                        )
-                        for i in soup.find_all(
-                            "a", {"class", "beatmapset-panel__cover-container"}
-                        ):
-                            maps.append(("Ranked", i["href"]))
-                        print(f"7: Fetched ranked maps ({title_count[6]} beatmaps)")
-
-                    if title_count[7] != 0 and 8 in choice_choice:
-                        print(
-                            f"8: Fetching loved maps ({title_count[7]} beatmaps)",
-                            end="\r",
-                        )
-                        expected_buttons = click_showmorebtn(
-                            actions,
-                            beatmaps_section,
-                            2,
-                            expected_buttons,
-                            title_count[7],
-                        )
-                        container_pos = 2
-                        for i in range(0, container_pos):
-                            if not expected_containers[i]:
-                                container_pos -= 1
-                        play_list = beatmaps_section.find_elements(
-                            By.XPATH,
-                            ".//div[@class='osu-layout__col-container osu-layout__col-container--with-gutter js-audio--group']",
-                        )[container_pos]
-                        soup = BeautifulSoup(
-                            play_list.get_attribute("innerHTML"), "html.parser"
-                        )
-                        for i in soup.find_all(
-                            "a", {"class", "beatmapset-panel__cover-container"}
-                        ):
-                            maps.append(("Loved", i["href"]))
-                        print(f"8: Fetched loved maps ({title_count[7]} beatmaps)")
-
-                    if title_count[8] != 0 and 9 in choice_choice:
-                        print(
-                            f"9: Fetching pending maps ({title_count[8]} beatmaps)",
-                            end="\r",
-                        )
-                        expected_buttons = click_showmorebtn(
-                            actions,
-                            beatmaps_section,
-                            3,
-                            expected_buttons,
-                            title_count[8],
-                        )
-                        container_pos = 3
-                        for i in range(0, container_pos):
-                            if not expected_containers[i]:
-                                container_pos -= 1
-                        play_list = beatmaps_section.find_elements(
-                            By.XPATH,
-                            ".//div[@class='osu-layout__col-container osu-layout__col-container--with-gutter js-audio--group']",
-                        )[container_pos]
-                        soup = BeautifulSoup(
-                            play_list.get_attribute("innerHTML"), "html.parser"
-                        )
-                        for i in soup.find_all(
-                            "a", {"class", "beatmapset-panel__cover-container"}
-                        ):
-                            maps.append(("Pending", i["href"]))
-                        print(f"9: Fetched pending maps ({title_count[8]} beatmaps)")
-
-                    if title_count[9] != 0 and 10 in choice_choice:
-                        print(
-                            f"10: Fetching graveyarded maps ({title_count[9]} beatmaps)",
-                            end="\r",
-                        )
-                        click_showmorebtn(
-                            actions,
-                            beatmaps_section,
-                            4,
-                            expected_buttons,
-                            title_count[9],
-                        )
-                        play_list = beatmaps_section.find_elements(
-                            By.XPATH,
-                            ".//div[@class='osu-layout__col-container osu-layout__col-container--with-gutter js-audio--group']",
-                        )[-1]
-                        soup = BeautifulSoup(
-                            play_list.get_attribute("innerHTML"), "html.parser"
-                        )
-                        for i in soup.find_all(
-                            "a", {"class", "beatmapset-panel__cover-container"}
-                        ):
-                            maps.append(("Graveyarded", i["href"]))
-                        print(f"10: Fetched graveyarded ({title_count[9]} beatmaps)")
-
-                # There is missing checks here cuz it be done earlier
-                # is there nothing to do? (Check for all useless)
-                if title_count[2] == 0 and 1 in choice_choice:
-                    print("1: No maps detected")
-                if title_count[0] == 0 and 2 in choice_choice:
-                    print("2: No top plays")
-                if title_count[1] == 0 and 3 in choice_choice:
-                    print("3: No #1 scores")
-                if title_count[4] == 0 and 4 in choice_choice:
-                    print("4: No favourite maps")
-                if title_count[5] == 0 and 5 in choice_choice:
-                    print("5: No recent top 1000 scores")
-                if title_count[3] == 0 and 6 in choice_choice:
-                    print("6: No recent plays")
-                if title_count[6] == 0 and 7 in choice_choice:
-                    print("7: No ranked beatmaps")
-                if title_count[7] == 0 and 8 in choice_choice:
-                    print("8: No loved beatmaps")
-                if title_count[8] == 0 and 9 in choice_choice:
-                    print("9: No pending maps")
-                if title_count[9] == 0 and 10 in choice_choice:
-                    print("10: No graveyarded maps")
-            except NoSuchElementException:
-                print("Site did not load properly. Try running this script again.")
-
-        # packs
-        case 2:
-            print(color.BLUE + "Select beatmap pack type\n")
-            options = ["Standard", "Spotlights", "Theme", "Artist"]
-            for i, item in enumerate(options, 1):
-                print(color.PURPLE + f"  {i}. " + color.CYAN + item)
-            print(color.END)
-            pack_type = int(input("Your choice >> "))
-            gamemode = 0
-            if pack_type == 1 or pack_type == 2:
-                print(color.BLUE + "Select gamemode for beatmap pack\n")
-                options = ["Standard", "Taiko", "Catch", "Mania"]
-                for i, item in enumerate(options, 1):
-                    print(color.PURPLE + f"  {i}. " + color.CYAN + item)
-                print(color.END)
-                gamemode = int(input("Your choice >> "))
-
-            sites = [
-                "https://osu.ppy.sh/beatmaps/packs?type=standard&page={}",
-                "https://osu.ppy.sh/beatmaps/packs?type=chart&page={}",
-                "https://osu.ppy.sh/beatmaps/packs?type=theme&page={}",
-                "https://osu.ppy.sh/beatmaps/packs?type=artist&page={}",
-            ]
-
-            driver = setup_webdriver(headless=True)
-            site = sites[pack_type - 1]
-            response = requests.get(site.format(1)).content
-            soup = BeautifulSoup(response, "html.parser")
-            page_cnt = int(
-                soup.find_all("a", {"class": "pagination-v2__link"})[-2].text
-            )
-
-            for page_num in range(1, page_cnt + 1):
-                print(f"Scanning page {page_num}/{page_cnt}", end="\r")
-                # get pack titles
-                actions = driver_get(driver, site.format(page_num), 1)
-                soup = BeautifulSoup(driver.page_source, "html.parser")
-                pack_titles = soup.find_all("div", {"class", "beatmap-pack__name"})
-                pack_progress = tqdm(
-                    ascii=True,
-                    desc=f"Retrieving beatmaps",
-                    total=len(pack_titles),
-                    leave=False,
-                )
-                maps += get_pack(
-                    driver, actions, page_num, pack_titles, pack_progress, gamemode
-                )
-                pack_progress.close()
-
-        # https://osu.ppy.sh/beatmapsets/1450344#mania/2981853
-        case 3:
-            if not DEBUG:
-                site = input("Tourney website url? >> ")
-            else:
-                site = "https://osu.ppy.sh/wiki/en/Tournaments/SOFT/5"
-            response = requests.get(site).content
-            soup = BeautifulSoup(response, "html.parser")
-            # if bulk=="n":
-            # TODO scrape and folders
-            # section_titles=[x.text for x in soup.find_all("h3", {"class", "osu-md__header osu-md__header--3"})]
-            # sort_maps=input(f"You selected no imports, so do you want maps to be sorted into folders? [Y/n] >> ").strip()
-            name = soup.find("h1", {"class": "osu-md__header osu-md__header--1"}).text
-            for link in BeautifulSoup(
-                response, "html.parser", parse_only=SoupStrainer("a")
-            ):
-                if link.has_attr("href") and "beatmapsets/" in link["href"]:
-                    maps.append((name, link["href"]))
-            print(color.BLUE)
-            print(color.BLUE + name + color.YELLOW)
-
-        case 4:
-            print(color.BLUE + "Which database file to get beatmaps from?\n")
-            options = ["osu.db", "collection.db"]
-            for i, item in enumerate(options, 1):
-                print(color.PURPLE + f"  {i}. " + color.CYAN + item)
-            print(color.END)
-            choice = int(input("Your choice >> "))
-
-            folder_name = "osu.db"
-            if not DEBUG:
-                if choice == 2:
+                    # https://osu.ppy.sh/beatmaps/687841?mode=mania
+                    site = input("\nPlayer/Mapper link? >> ")
+                    print(color.BLUE + "\nWhat gamemode for this user??\n")
+                    options = ["Standard", "Taiko", "Catch", "Mania"]
+                    for i, item in enumerate(options, 1):
+                        print(color.PURPLE + f"  {i}. " + color.CYAN + item)
+                    print(color.END)
+                    gamemode = int(input("Your choice >> "))
+                    clearline(10)
                     print(
                         color.PURPLE
-                        + "collections.db requires a osu.db with all collection maps indexed inside! Until I figure out how to avoid this.\n"
+                        + f"{gamemode_names[gamemode]} has been selected"
+                        + color.END
                     )
-                print(color.BLUE + "Which database file to get beatmaps from?\n")
-                osudb_file = input("Target osu.db file location >> ")
-            else:
-                osudb_file = "/home/milk/osudl/database/osu!.db"
-            custom_osu_dict = enumerate_osudb(osudb_file)
-            if choice == 1:
-                maps = list(custom_osu_dict.values())
-            elif choice == 2:
-                folder_name = "collection.db"
-                if not DEBUG:
-                    collectiondb_file = input("collection.db file location >> ")
-                else:
-                    collectiondb_file = "/home/milk/osudl/database/collection.db"
-                maps = enumerate_collectiondb(custom_osu_dict, collectiondb_file)
+                    site = site.rstrip("/")
 
-            for i, beatmapset_id in enumerate(maps):
-                maps[i] = (
-                    folder_name,
-                    "https://osu.ppy.sh/beatmapsets/"
-                    + str(maps[i][0])
-                    + "/"
-                    + str(maps[i][1]),
-                )  # TODO: !! in download_file check the validity of beatmapsetid with api
-        case 5:
-            print(color.BLUE + "Which database file to get beatmaps from?\n")
-            options = [".txt file"]
-            for i, item in enumerate(options, 1):
-                print(color.PURPLE + f"  {i}. " + color.CYAN + item)
-            print(color.END)
-            choice = int(input("Your choice >> "))
-            if choice == 1:
-                text_file = input("Target .txt file location >> ")
-            with open(text_file, "r", encoding="UTF-8") as file:
-                data = file.read().rstrip()
-                for url in re.findall(
-                    "http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+",
-                    data,
+                    if all(x in ["osu", "taiko", "fruits", "mania"] for x in site):
+                        tmp = site.rfind("/")
+                        site = site[:tmp]
+
+                    site = site + "/{}".format(gamemode_names[gamemode])
+                    if DEBUG:
+                        site = "https://osu.ppy.sh/users/5139042/osu"
+
+                    # option->title_count
+                    # 1->2 2->0 3->1 4->4 5->5 6->3 7->6 8->7 9->8 10->9
+                    print(color.BLUE + "\nUser Options" + color.END)
+                    user_options = [
+                        "All plays",
+                        "Top plays",
+                        "First place ranks",
+                        "Favorites",
+                        "Recent top 1000",
+                        "Recent 24h submissions",
+                    ]
+                    for i, item in enumerate(user_options, 1):
+                        print(color.PURPLE + f"  {i}. " + color.CYAN + item)
+                    print(color.BLUE + "\nMapper Options" + color.END)
+                    mapper_options = ["Ranked", "Loved", "Pending", "Graveyarded"]
+                    for i, item in enumerate(mapper_options, 7):
+                        print(color.PURPLE + f"  {i}. " + color.CYAN + item)
+                    print(color.END)
+                    choice_choice = input("Your choice(s) >> ").split()
+                    choice_choice = list(map(int, choice_choice))
+
+                    use_api = True
+                    # if all(x in [1, 2, 3, 5, 6] for x in choice_choice):
+                    #     if not DEBUG:
+                    #         print("osu! api key for downloading unlimited beatmaps much faster (https://osu.ppy.sh/p/api)")
+                    #         osu_api_key=input("key >> ").strip()
+                    #         if not osu_api_key:
+                    #             use_api=True
+                    #             print("Proceeding without api key is possible, but you will get rate limited on osu.ppy.sh if you download too many beatmaps")
+                    #     else:
+                    #         osu_api_key="dd0653458de7f3ccb1128162966a8248b83b3d13"
+
+                    # get site
+                    actions = driver_get(
+                        driver, site, 1
+                    )  # this is blocking until site is loaded
+
+                    # get user info
+                    user_name = driver.find_element(
+                        By.XPATH, "//span[@class='u-ellipsis-pre-overflow']"
+                    ).text
+                    user_country = driver.find_element(
+                        By.XPATH, "//span[@class='profile-info__flag-text']"
+                    ).text
+
+                    print(
+                        f'Fetching beatmaps from player "{user_name}" from {user_country}'
+                    )
+                    # The following for loop checks each choice for being selected and does pre and post checking:
+
+                    # Prechecking
+                    # find title and title__count
+                    # exist:
+                    # title = useless
+                    # title, title__count=0 = not so useless, zero maps that satisfies condition
+                    # title, title__conut>0 = useful
+                    # then we find the buttons inside the second occurence of section data-page-id
+
+                    # Postchecking
+                    # Get inital button count (check for not so useless)
+                    # expected_buttons is needed for checking which is which suppose there is not min or max possible buttons
+
+                    if 1 in choice_choice or 6 in choice_choice:
+                        historical_section = driver.find_element(
+                            By.XPATH, "//div[@data-page-id='historical']"
+                        )
+                        # Prechecking
+                        expected_buttons = [1, 1]
+                        section_titles = historical_section.find_elements(
+                            By.XPATH, ".//h3[@class='title title--page-extra-small']"
+                        )
+                        for title in section_titles:
+                            if "Play History" in title.text:
+                                continue
+                            if "Most Played Beatmaps" in title.text:
+                                title_count[2] = format_website_number(
+                                    section_titles[1]
+                                    .find_element(
+                                        By.XPATH, ".//span[@class='title__count']"
+                                    )
+                                    .text
+                                )
+                                if title_count[2] <= 5:
+                                    expected_buttons[0] = 0
+
+                            if "Recent Plays (24h)" in title.text:
+                                title_count[3] = format_website_number(
+                                    section_titles[2]
+                                    .find_element(
+                                        By.XPATH, ".//span[@class='title__count']"
+                                    )
+                                    .text
+                                )
+                                if title_count[3] <= 5:
+                                    expected_buttons[1] = 0
+
+                        # Postchecking
+                        if title_count[2] != 0 and 1 in choice_choice:
+                            print(
+                                "1: Fetching all beatmaps ever played ({} beatmaps)".format(
+                                    title_count[2]
+                                ),
+                                end="\r",
+                            )
+                            expected_buttons = click_showmorebtn(
+                                actions,
+                                historical_section,
+                                0,
+                                expected_buttons,
+                                title_count[2],
+                            )
+                            soup = BeautifulSoup(driver.page_source, "html.parser")
+                            # We use BS4 to parse cuz selenium getAttribute is slow
+                            # all_user_maps_played=driver.find_elements(By.XPATH, "//a[@class='beatmap-playcount__cover']")
+                            for i in soup.find_all(
+                                "a", {"class", "beatmap-playcount__title"}
+                            ):
+                                maps.append(("All plays", i["href"]))
+                            print(
+                                "1: Fetched all beatmaps ever played ({} beatmaps)".format(
+                                    title_count[2]
+                                )
+                            )
+
+                        if title_count[3] != 0 and 6 in choice_choice:
+                            print(
+                                f"6: Fetching beatmaps played in last 24h ({title_count[3]} beatmaps)",
+                                end="\r",
+                            )
+                            click_showmorebtn(
+                                actions,
+                                historical_section,
+                                1,
+                                expected_buttons,
+                                title_count[3],
+                            )
+                            play_list = historical_section.find_element(
+                                By.XPATH, ".//div[@class='play-detail-list']"
+                            )
+                            soup = BeautifulSoup(
+                                play_list.get_attribute("innerHTML"), "html.parser"
+                            )
+                            for i in soup.find_all(
+                                "a", {"class", "play-detail__title u-ellipsis-overflow"}
+                            ):
+                                maps.append(("Recent Plays (24h)", i["href"]))
+                            print(
+                                f"6: Fetched beatmaps played in last 24h ({title_count[3]} beatmaps)"
+                            )
+
+                    if 5 in choice_choice:
+                        recentactivity_section = driver.find_element(
+                            By.XPATH, "//div[@data-page-id='recent_activity']"
+                        )
+                        # Prechecking
+                        expected_buttons = [1]
+                        title_count[5] = len(
+                            driver.find_elements(
+                                By.XPATH, "//li[@class='profile-extra-entries__item']"
+                            )
+                        )
+                        if title_count[5] != 0:
+                            click_showmorebtn(
+                                actions,
+                                recentactivity_section,
+                                0,
+                                expected_buttons,
+                                title_count[5],
+                            )
+                            soup = BeautifulSoup(driver.page_source, "html.parser")
+                            extra_entries = soup.find_all(
+                                "div", {"class", "profile-extra-entries__text"}
+                            )
+                            for entry in extra_entries:
+                                for a in entry.find_all("a", href=True):
+                                    if "/b/" in a["href"]:
+                                        maps.append(
+                                            (
+                                                "Recent top 1000 plays",
+                                                "https://osu.ppy.sh{}".format(a["href"]),
+                                            )
+                                        )
+
+                    if 2 in choice_choice or 3 in choice_choice:
+                        if section_order[1] > section_order[2]:
+                            # ranks are later
+                            play_detail_list = 1
+                        else:
+                            play_detail_list = 0                        topranks_section = driver.find_element(
+                            By.XPATH, "//div[@data-page-id='top_ranks']"
+                        )
+                        # Prechecking
+                        expected_buttons = [1, 1]
+                        section_titles = topranks_section.find_elements(
+                            By.XPATH, ".//h3[@class='title title--page-extra-small']"
+                        )
+                        for title in section_titles:
+                            if "Best Performance" in title.text:
+                                title_count[0] = format_website_number(
+                                    section_titles[0]
+                                    .find_element(
+                                        By.XPATH, ".//span[@class='title__count']"
+                                    )
+                                    .text
+                                )
+                                if title_count[0] <= 5:
+                                    expected_buttons[0] = 0
+                            if "First Place Ranks" in title.text:
+                                title_count[1] = format_website_number(
+                                    section_titles[1]
+                                    .find_element(
+                                        By.XPATH, ".//span[@class='title__count']"
+                                    )
+                                    .text
+                                )
+                                if title_count[1] <= 5:
+                                    expected_buttons[1] = 0
+                        # Postchecking
+                        if title_count[0] != 0 and 2 in choice_choice:
+                            print(
+                                f"2: Fetching top pp plays ({title_count[0]} beatmaps)",
+                                end="\r",
+                            )
+                            expected_buttons = click_showmorebtn(
+                                actions,
+                                topranks_section,
+                                0,
+                                expected_buttons,
+                                title_count[0],
+                            )
+                            play_list = topranks_section.find_elements(
+                                By.XPATH, ".//div[@class='play-detail-list']"
+                            )[play_detail_list]
+                            soup = BeautifulSoup(
+                                play_list.get_attribute("innerHTML"), "html.parser"
+                            )
+                            for i in soup.find_all(
+                                "a", {"class", "play-detail__title u-ellipsis-overflow"}
+                            ):
+                                maps.append(("Top plays", i["href"]))
+                            play_detail_list += 1
+                            print(f"2: Fetched top pp plays ({title_count[0]} beatmaps)")
+
+                        if title_count[1] != 0 and 3 in choice_choice:
+                            print(
+                                f"3: Fetching global #1 scores ({title_count[1]} beatmaps)",
+                                end="\r",
+                            )
+                            click_showmorebtn(
+                                actions,
+                                topranks_section,
+                                1,
+                                expected_buttons,
+                                title_count[1],
+                            )
+                            play_list = topranks_section.find_elements(
+                                By.XPATH, ".//div[@class='play-detail-list']"
+                            )[play_detail_list]
+                            soup = BeautifulSoup(
+                                play_list.get_attribute("innerHTML"), "html.parser"
+                            )
+                            for i in soup.find_all(
+                                "a", {"class", "play-detail__title u-ellipsis-overflow"}
+                            ):
+                                maps.append(("First place ranks", i["href"]))
+                            print(
+                                f"3: Fetched global #1 scores by user ({title_count[1]} beatmaps)"
+                            )
+
+                    if all(x in [4, 7, 8, 9, 10] for x in choice_choice):
+                        beatmaps_section = driver.find_element(
+                            By.XPATH, "//div[@data-page-id='beatmaps']"
+                        )
+                        # Prechecking
+                        expected_buttons = [1, 1, 1, 1, 1]
+                        expected_containers = [1, 1, 1, 1, 1]
+                        section_titles = beatmaps_section.find_elements(
+                            By.XPATH, ".//h3[@class='title title--page-extra-small']"
+                        )
+                        for title in section_titles:
+                            if "Favourite" in title.text:
+                                title_count[4] = format_website_number(
+                                    section_titles[0]
+                                    .find_element(
+                                        By.XPATH, ".//span[@class='title__count']"
+                                    )
+                                    .text
+                                )
+                                if title_count[4] == 0:
+                                    expected_containers[0] = 0
+                                if title_count[4] <= 6:
+                                    expected_buttons[0] = 0
+                            if "Ranked" in title.text:
+                                title_count[6] = format_website_number(
+                                    section_titles[1]
+                                    .find_element(
+                                        By.XPATH, ".//span[@class='title__count']"
+                                    )
+                                    .text
+                                )
+                                if title_count[6] == 0:
+                                    expected_containers[1] = 0
+                                if title_count[6] <= 6:
+                                    expected_buttons[1] = 0
+                            if "Loved" in title.text:
+                                title_count[7] = format_website_number(
+                                    section_titles[2]
+                                    .find_element(
+                                        By.XPATH, ".//span[@class='title__count']"
+                                    )
+                                    .text
+                                )
+                                if title_count[7] == 0:
+                                    expected_containers[2] = 0
+                                if title_count[7] <= 6:
+                                    expected_buttons[2] = 0
+                            if "Pending" in title.text:
+                                title_count[8] = format_website_number(
+                                    section_titles[3]
+                                    .find_element(
+                                        By.XPATH, ".//span[@class='title__count']"
+                                    )
+                                    .text
+                                )
+                                if title_count[8] == 0:
+                                    expected_containers[3] = 0
+                                if title_count[8] <= 6:
+                                    expected_buttons[3] = 0
+                            if "Graveyarded" in title.text:
+                                title_count[9] = format_website_number(
+                                    section_titles[4]
+                                    .find_element(
+                                        By.XPATH, ".//span[@class='title__count']"
+                                    )
+                                    .text
+                                )
+                                if title_count[9] == 0:
+                                    expected_containers[4] = 0
+                                if title_count[9] <= 6:
+                                    expected_buttons[4] = 0
+
+                        # Postchecking
+                        if title_count[4] != 0 and 4 in choice_choice:
+                            print(
+                                f"4: Fetching favourite maps ({title_count[4]} beatmaps)",
+                                end="\r",
+                            )
+                            expected_buttons = click_showmorebtn(
+                                actions,
+                                beatmaps_section,
+                                0,
+                                expected_buttons,
+                                title_count[4],
+                            )
+                            play_list = beatmaps_section.find_elements(
+                                By.XPATH,
+                                ".//div[@class='osu-layout__col-container osu-layout__col-container--with-gutter js-audio--group']",
+                            )[0]
+                            soup = BeautifulSoup(
+                                play_list.get_attribute("innerHTML"), "html.parser"
+                            )
+                            for i in soup.find_all(
+                                "a", {"class", "beatmapset-panel__cover-container"}
+                            ):
+                                maps.append(("Favourites", i["href"]))
+                            print(f"4: Fetched favourite maps ({title_count[4]} beatmaps)")
+
+                        if title_count[6] != 0 and 7 in choice_choice:
+                            print(
+                                f"7: Fetching ranked maps ({title_count[6]} beatmaps)",
+                                end="\r",
+                            )
+                            expected_buttons = click_showmorebtn(
+                                actions,
+                                beatmaps_section,
+                                1,
+                                expected_buttons,
+                                title_count[6],
+                            )
+                            container_pos = 1
+                            for i in range(0, container_pos):
+                                if not expected_containers[i]:
+                                    container_pos -= 1
+                            play_list = beatmaps_section.find_elements(
+                                By.XPATH,
+                                ".//div[@class='osu-layout__col-container osu-layout__col-container--with-gutter js-audio--group']",
+                            )[container_pos]
+                            soup = BeautifulSoup(
+                                play_list.get_attribute("innerHTML"), "html.parser"
+                            )
+                            for i in soup.find_all(
+                                "a", {"class", "beatmapset-panel__cover-container"}
+                            ):
+                                maps.append(("Ranked", i["href"]))
+                            print(f"7: Fetched ranked maps ({title_count[6]} beatmaps)")
+
+                        if title_count[7] != 0 and 8 in choice_choice:
+                            print(
+                                f"8: Fetching loved maps ({title_count[7]} beatmaps)",
+                                end="\r",
+                            )
+                            expected_buttons = click_showmorebtn(
+                                actions,
+                                beatmaps_section,
+                                2,
+                                expected_buttons,
+                                title_count[7],
+                            )
+                            container_pos = 2
+                            for i in range(0, container_pos):
+                                if not expected_containers[i]:
+                                    container_pos -= 1
+                            play_list = beatmaps_section.find_elements(
+                                By.XPATH,
+                                ".//div[@class='osu-layout__col-container osu-layout__col-container--with-gutter js-audio--group']",
+                            )[container_pos]
+                            soup = BeautifulSoup(
+                                play_list.get_attribute("innerHTML"), "html.parser"
+                            )
+                            for i in soup.find_all(
+                                "a", {"class", "beatmapset-panel__cover-container"}
+                            ):
+                                maps.append(("Loved", i["href"]))
+                            print(f"8: Fetched loved maps ({title_count[7]} beatmaps)")
+
+                        if title_count[8] != 0 and 9 in choice_choice:
+                            print(
+                                f"9: Fetching pending maps ({title_count[8]} beatmaps)",
+                                end="\r",
+                            )
+                            expected_buttons = click_showmorebtn(
+                                actions,
+                                beatmaps_section,
+                                3,
+                                expected_buttons,
+                                title_count[8],
+                            )
+                            container_pos = 3
+                            for i in range(0, container_pos):
+                                if not expected_containers[i]:
+                                    container_pos -= 1
+                            play_list = beatmaps_section.find_elements(
+                                By.XPATH,
+                                ".//div[@class='osu-layout__col-container osu-layout__col-container--with-gutter js-audio--group']",
+                            )[container_pos]
+                            soup = BeautifulSoup(
+                                play_list.get_attribute("innerHTML"), "html.parser"
+                            )
+                            for i in soup.find_all(
+                                "a", {"class", "beatmapset-panel__cover-container"}
+                            ):
+                                maps.append(("Pending", i["href"]))
+                            print(f"9: Fetched pending maps ({title_count[8]} beatmaps)")
+
+                        if title_count[9] != 0 and 10 in choice_choice:
+                            print(
+                                f"10: Fetching graveyarded maps ({title_count[9]} beatmaps)",
+                                end="\r",
+                            )
+                            click_showmorebtn(
+                                actions,
+                                beatmaps_section,
+                                4,
+                                expected_buttons,
+                                title_count[9],
+                            )
+                            play_list = beatmaps_section.find_elements(
+                                By.XPATH,
+                                ".//div[@class='osu-layout__col-container osu-layout__col-container--with-gutter js-audio--group']",
+                            )[-1]
+                            soup = BeautifulSoup(
+                                play_list.get_attribute("innerHTML"), "html.parser"
+                            )
+                            for i in soup.find_all(
+                                "a", {"class", "beatmapset-panel__cover-container"}
+                            ):
+                                maps.append(("Graveyarded", i["href"]))
+                            print(f"10: Fetched graveyarded ({title_count[9]} beatmaps)")
+
+                    # There is missing checks here cuz it be done earlier
+                    # is there nothing to do? (Check for all useless)
+                    if title_count[2] == 0 and 1 in choice_choice:
+                        print("1: No maps detected")
+                    if title_count[0] == 0 and 2 in choice_choice:
+                        print("2: No top plays")
+                    if title_count[1] == 0 and 3 in choice_choice:
+                        print("3: No #1 scores")
+                    if title_count[4] == 0 and 4 in choice_choice:
+                        print("4: No favourite maps")
+                    if title_count[5] == 0 and 5 in choice_choice:
+                        print("5: No recent top 1000 scores")
+                    if title_count[3] == 0 and 6 in choice_choice:
+                        print("6: No recent plays")
+                    if title_count[6] == 0 and 7 in choice_choice:
+                        print("7: No ranked beatmaps")
+                    if title_count[7] == 0 and 8 in choice_choice:
+                        print("8: No loved beatmaps")
+                    if title_count[8] == 0 and 9 in choice_choice:
+                        print("9: No pending maps")
+                    if title_count[9] == 0 and 10 in choice_choice:
+                        print("10: No graveyarded maps")
+                except NoSuchElementException:
+                    print("Site did not load properly. Try running this script again.")
+
+            # packs
+            case 2:
+                print(color.BLUE + "Select beatmap pack type\n")
+                options = ["Standard", "Spotlights", "Theme", "Artist"]
+                for i, item in enumerate(options, 1):
+                    print(color.PURPLE + f"  {i}. " + color.CYAN + item)
+                print(color.END)
+                pack_type = int(input("Your choice >> "))
+                gamemode = 0
+                if pack_type == 1 or pack_type == 2:
+                    print(color.BLUE + "Select gamemode for beatmap pack\n")
+                    options = ["Standard", "Taiko", "Catch", "Mania"]
+                    for i, item in enumerate(options, 1):
+                        print(color.PURPLE + f"  {i}. " + color.CYAN + item)
+                    print(color.END)
+                    gamemode = int(input("Your choice >> "))
+
+                sites = [
+                    "https://osu.ppy.sh/beatmaps/packs?type=standard&page={}",
+                    "https://osu.ppy.sh/beatmaps/packs?type=chart&page={}",
+                    "https://osu.ppy.sh/beatmaps/packs?type=theme&page={}",
+                    "https://osu.ppy.sh/beatmaps/packs?type=artist&page={}",
+                ]
+
+                driver = setup_webdriver(headless=True)
+                site = sites[pack_type - 1]
+                response = requests.get(site.format(1)).content
+                soup = BeautifulSoup(response, "html.parser")
+                page_cnt = int(
+                    soup.find_all("a", {"class": "pagination-v2__link"})[-2].text
+                )
+
+                for page_num in range(1, page_cnt + 1):
+                    print(f"Scanning page {page_num}/{page_cnt}", end="\r")
+                    # get pack titles
+                    actions = driver_get(driver, site.format(page_num), 1)
+                    soup = BeautifulSoup(driver.page_source, "html.parser")
+                    pack_titles = soup.find_all("div", {"class", "beatmap-pack__name"})
+                    pack_progress = tqdm(
+                        ascii=True,
+                        desc=f"Retrieving beatmaps",
+                        total=len(pack_titles),
+                        leave=False,
+                    )
+                    maps += get_pack(
+                        driver, actions, page_num, pack_titles, pack_progress, gamemode
+                    )
+                    pack_progress.close()
+
+            # https://osu.ppy.sh/beatmapsets/1450344#mania/2981853
+            case 3:
+                if not DEBUG:
+                    site = input("Tourney website url? >> ")
+                else:
+                    site = "https://osu.ppy.sh/wiki/en/Tournaments/SOFT/5"
+                response = requests.get(site).content
+                soup = BeautifulSoup(response, "html.parser")
+                # if bulk=="n":
+                # TODO scrape and folders
+                # section_titles=[x.text for x in soup.find_all("h3", {"class", "osu-md__header osu-md__header--3"})]
+                # sort_maps=input(f"You selected no imports, so do you want maps to be sorted into folders? [Y/n] >> ").strip()
+                name = soup.find("h1", {"class": "osu-md__header osu-md__header--1"}).text
+                for link in BeautifulSoup(
+                    response, "html.parser", parse_only=SoupStrainer("a")
                 ):
-                    maps.append("txt", url)
-            # text, xls
-        # case 6:
-        # websites
+                    if link.has_attr("href") and "beatmapsets/" in link["href"]:
+                        maps.append((name, link["href"]))
+                print(color.BLUE)
+                print(color.BLUE + name + color.YELLOW)
+
+            case 4:
+                print(color.BLUE + "Which database file to get beatmaps from?\n")
+                options = ["osu.db", "collection.db"]
+                for i, item in enumerate(options, 1):
+                    print(color.PURPLE + f"  {i}. " + color.CYAN + item)
+                print(color.END)
+                choice = int(input("Your choice >> "))
+
+                folder_name = "osu.db"
+                if not DEBUG:
+                    if choice == 2:
+                        print(
+                            color.PURPLE
+                            + "collections.db requires a osu.db with all collection maps indexed inside! Until I figure out how to avoid this.\n"
+                        )
+                    print(color.BLUE + "Which database file to get beatmaps from?\n")
+                    osudb_file = input("Target osu.db file location >> ")
+                else:
+                    osudb_file = "/home/milk/osudl/database/osu!.db"
+                custom_osu_dict = enumerate_osudb(osudb_file)
+                if choice == 1:
+                    maps = list(custom_osu_dict.values())
+                elif choice == 2:
+                    folder_name = "collection.db"
+                    if not DEBUG:
+                        collectiondb_file = input("collection.db file location >> ")
+                    else:
+                        collectiondb_file = "/home/milk/osudl/database/collection.db"
+                    maps = enumerate_collectiondb(custom_osu_dict, collectiondb_file)
+
+                for i, beatmapset_id in enumerate(maps):
+                    maps[i] = (
+                        folder_name,
+                        "https://osu.ppy.sh/beatmapsets/"
+                        + str(maps[i][0])
+                        + "/"
+                        + str(maps[i][1]),
+                    )  # TODO: !! in download_file check the validity of beatmapsetid with api
+            case 5:
+                print(color.BLUE + "Which database file to get beatmaps from?\n")
+                options = [".txt file"]
+                for i, item in enumerate(options, 1):
+                    print(color.PURPLE + f"  {i}. " + color.CYAN + item)
+                print(color.END)
+                choice = int(input("Your choice >> "))
+                if choice == 1:
+                    text_file = input("Target .txt file location >> ")
+                with open(text_file, "r", encoding="UTF-8") as file:
+                    data = file.read().rstrip()
+                    for url in re.findall(
+                        "http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+",
+                        data,
+                    ):
+                        maps.append("txt", url)
+                # text, xls
+            # case 6:
+            # websites
+        else:
+            maps=sys.argv[2]
+            OAUTH_TOKEN=sys.argv[1]
 
     # get rid of duplicates
     maps = list(set(maps))
@@ -1410,3 +1412,7 @@ if __name__ == "__main__":
     print(
         "If there are still failures even after retries, it is likely that the beatmap requested does not exist (I didn't write something to check beatmapset validity yet)"
     )
+
+
+if __name__ == "__main__":
+    main()

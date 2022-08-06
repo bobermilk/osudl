@@ -6,8 +6,10 @@ import os
 import re
 import requests
 import time
+import osudl
 API_URL = "https://osu.ppy.sh/api/v2"
 TOKEN_URL = 'https://osu.ppy.sh/oauth/token'
+missing=""
 
 client_id=123456
 client_secret=''
@@ -36,7 +38,7 @@ def get_beatmaphash(name,beatmap_id):
     try:
         return j["checksum"], j["beatmapset_id"]
     except:
-        print(f"{name}: {beatmap_id}")
+        missing.append(f"{name}: {beatmap_id}\n")
         return 0,0
 
 def create_collection(tournament_collections, version: int, filename: str):
@@ -64,11 +66,10 @@ if __name__ == "__main__":
     tournament_dict={}
     # hardcoded for now
     tourney_dir=os.path.join(os.getcwd(),"md","mania")
-    print("The following is printed if you need to manually add the song to the collection")
-    print("Go to the tournament md file and search for it, then go to the link")
     for filename in os.listdir(tourney_dir):
         with open(os.path.join(tourney_dir, filename)) as f:
             name = filename[:-3]
+            print(f"downloading {name}...")
             urls=[x for x in urlextractor.find_urls(f.read()) if "beatmapsets" in x]
             tourney_hash=[]
             for url in urls:
@@ -82,13 +83,16 @@ if __name__ == "__main__":
                     tourney_hash.append(hash)
                     maps.append(beatmapsetid)
             tournament_dict[name]=tourney_hash
-    print()
-    print("tournament dict in case insertion does not work")
-    print(tournament_dict)
-    print()
-    print("maps for use with main program")
-    print(maps)
-
     create_collection(tournament_dict, 1, "tournament.db")
+    print()
+    with open("missing.txt", "w") as f:
+        f.write(missing)
+    print("wrote the missing maps to ./missing.txt")
+    print()
+    print("wrote the tournaments to ./tournament.db")
+    print()
+    print("attempting to download all the maps")
+    osudl.main(OAUTH_TOKEN,maps)
+
 
 
