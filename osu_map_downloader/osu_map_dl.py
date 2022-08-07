@@ -26,23 +26,14 @@ def getIdsFromLinks(links):
         ids.append(i)
 
     for url in re.findall(rb, links):
-        try:
-            r = requests.head(url, allow_redirects=True, timeout=10)
+        ids.append(re.findall(ra, r.url)[0])
 
-            ids.append(re.findall(ra, r.url)[0])
-        except:
-            print("{} is not a valid beatmap URL!".format(url))
-    
     if len(ids) == 0:
         prefix = 'https://osu.ppy.sh/b/'
         beatmap_ids = links.split('\n')
         for beatmap_id in beatmap_ids:
             url = prefix + beatmap_id
-            try:
-                r = requests.head(url, allow_redirects=True, timeout=10)
-                ids.append(re.findall(ra, r.url)[0])
-            except:
-                print("{} is not a valid beatmap URL!".format(url))
+            ids.append(re.findall(ra, r.url)[0])
 
     return ids
 
@@ -69,6 +60,7 @@ def download(ids, path, name):
 
             timeout = False
             filename = os.path.join(path, id + ".osz")
+            header={"referer":"https://osu.ppy.sh/beatmapsets/{}".format(id)}
 
             if os.path.isfile(filename):
                 print("\n#{} exists".format(id))
@@ -76,31 +68,23 @@ def download(ids, path, name):
 
             else:
                 try:
-                    r = requests.head(url, allow_redirects=True, timeout=10)
+                    r = requests.get(url, allow_redirects=True, cookies=cookie, headers=header)
+                    with open(filename, "wb") as f:
+                        f.write(r.content)
+                    time.sleep(2)
                 except:
-                    timeout = True
-
-                # download the beatmap file
-                if not timeout and r.status_code == 200:
-
-                    try:
-                        r = requests.get(r.url)
-                        with open(filename, "wb") as f:
-                            f.write(r.content)
-                        time.sleep(2)
-                    except:
-                        pass
+                    pass
 
 
 
-                    dled.append(filename)
+                dled.append(filename)
 
-                    if os.path.isfile(filename):
-                        print("\nDownloaded #{}".format(id))
-                        success = True
-                        
+                if os.path.isfile(filename):
+                    print("\nDownloaded #{}".format(id))
+                    success = True
+                    
 
-                break
+            break
         
         # print fail message if none of the mirrors work or if download didn't complete
         if not success:
