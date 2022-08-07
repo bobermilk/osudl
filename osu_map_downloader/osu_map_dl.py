@@ -12,6 +12,7 @@ from zipfile import ZipFile
 import tempfile
 import os
 from pathlib import Path
+import time
 
 def getIdsFromLinks(links):
     ra = "(?<=beatmapsets\/)([0-9]*)(?=#|\n)" # matches format /beatmapsets/xxxxx#xxxxx or /beatmapsets/xxxxx
@@ -49,9 +50,12 @@ def download(ids, path, name):
     # use temp_dir if no path specified
     path=os.path.join(os.getcwd(),"downloads")
 
-    mirrors = { 
-        "beatconnect.io": "https://beatconnect.io/b/{}"
-        }
+    mirrors = {
+        "osu.ppy.sh": "https://osu.ppy.sh/beatmapsets/{}/download"
+    }
+    # mirrors = { 
+        # "beatconnect.io": "https://beatconnect.io/b/{}"
+        # }
 
     dled = []
     failed=""
@@ -80,12 +84,10 @@ def download(ids, path, name):
                 if not timeout and r.status_code == 200:
 
                     try:
-                        if wg:
-                            wget.download(r.url, out=filename)
-                        else:
-                                r = requests.get(r.url)
-                                with open(filename, "wb") as f:
-                                    f.write(r.content)
+                        r = requests.get(r.url)
+                        with open(filename, "wb") as f:
+                            f.write(r.content)
+                        time.sleep(2)
                     except:
                         pass
 
@@ -96,6 +98,7 @@ def download(ids, path, name):
                     if os.path.isfile(filename):
                         print("\nDownloaded #{}".format(id))
                         success = True
+                        
 
                 break
         
