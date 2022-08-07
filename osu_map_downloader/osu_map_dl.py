@@ -71,7 +71,7 @@ def download(ids, path, name):
                     r = requests.get(url, allow_redirects=True, cookies=cookie, headers=header)
                     with open(filename, "wb") as f:
                         f.write(r.content)
-                    time.sleep(2)
+                    time.sleep(3)
                 except:
                     pass
 
